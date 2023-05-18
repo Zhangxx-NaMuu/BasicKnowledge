@@ -7,7 +7,7 @@ mesh = trimesh2vedo(mesh)
 mesh = vedo.vedo2trimesh(mesh)
 ```
 
-### <font face="微软雅黑" color=green size=5>open3d与trimesh互转问题</font>
+
 ```
 # trimesh 转open3d
 mesh = mesh.as_open3d
