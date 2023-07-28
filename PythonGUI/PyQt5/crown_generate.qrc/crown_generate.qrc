@@ -1,0 +1,23 @@
+<RCC>
+  <qresource prefix="crown_generate">
+    <file>11.jpeg</file>
+    <file>12.jpeg</file>
+    <file>13.jpeg</file>
+    <file>14.jpg</file>
+    <file>15.jpg</file>
+    <file>16.jpg</file>
+    <file>17.jpg</file>
+    <file>18.jpg</file>
+    <file>crown_generate.qrc</file>
+    <file>img2.jpeg</file>
+    <file>crown_generate.qrc</file>
+    <file>11.jpeg</file>
+    <file>12.jpeg</file>
+    <file>13.jpeg</file>
+    <file>14.jpg</file>
+    <file>15.jpg</file>
+    <file>16.jpg</file>
+    <file>img2.jpeg</file>
+    <file>img2.jpeg</file>
+  </qresource>
+</RCC>
