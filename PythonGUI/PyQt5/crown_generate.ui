@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CrownGenerate</class>
+ <widget class="QMainWindow" name="CrownGenerate">
+  <property name="windowModality">
+   <enum>Qt::WindowModal</enum>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>702</width>
+    <height>522</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>18</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>CrownGenerate</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QListView" name="listView">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>-10</y>
+      <width>841</width>
+      <height>701</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-image: url(:/crown_generate/13.jpeg);
+</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="welcome">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>10</y>
+      <width>431</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">font-family:&quot;Microsoft Yahei&quot;;
+font-size: 28pt;
+color: rgba(255, 0, 0, 0.5); 
+font-weight: bold; 
+font-style: italic;
+
+
+</string>
+    </property>
+    <property name="text">
+     <string>欢迎来到牙齿生成界面</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="toothNumber">
+    <property name="geometry">
+     <rect>
+      <x>60</x>
+      <y>150</y>
+      <width>221</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>迷你简粗仿宋</family>
+      <pointsize>22</pointsize>
+      <weight>50</weight>
+      <italic>false</italic>
+      <bold>false</bold>
+      <kerning>false</kerning>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color: blue;
+background-image: url(:/crown_generate/16.jpg);
+background-color: rgb(143, 143, 213);
+font:22pt &quot;迷你简粗仿宋&quot;;
+background-color: rgba(255, 255, 255, 0.2);
+width:150px;
+border: 2px inset grey; padding: 10px;
+
+</string>
+    </property>
+    <property name="text">
+     <string>请选择牙位号：</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="generateModel">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>140</y>
+      <width>231</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>迷你简粗仿宋</family>
+      <pointsize>22</pointsize>
+      <weight>50</weight>
+      <italic>false</italic>
+      <bold>false</bold>
+      <kerning>false</kerning>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color: blue;
+background-image: url(:/crown_generate/17.jpg);
+background-color: rgb(143, 143, 213);
+font:22pt &quot;迷你简粗仿宋&quot;;
+background-color: rgba(255, 255, 255, 100);
+width:150px;
+border: 2px inset grey; padding: 10px;
+</string>
+    </property>
+    <property name="text">
+     <string>请选择生成模型：</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_upper">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>230</y>
+      <width>171</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>80</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>18</pointsize>
+      <italic>true</italic>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">
+background-image: url(:/crown_generate/img2.jpeg);</string>
+    </property>
+    <property name="text">
+     <string>upper</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_lower">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>300</y>
+      <width>171</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>100</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>18</pointsize>
+      <italic>true</italic>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">
+background-image: url(:/crown_generate/img2.jpeg);</string>
+    </property>
+    <property name="text">
+     <string>lower</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="tooth_7">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>300</y>
+      <width>100</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>100</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>22</pointsize>
+      <italic>true</italic>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgba(255, 255, 255, 100);
+background-image: url(:/crown_generate/15.jpg);
+width:150px;
+border: 2px inset grey; padding: 10px;
+</string>
+    </property>
+    <property name="text">
+     <string>7</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="tooth_6">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>230</y>
+      <width>100</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>100</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>22</pointsize>
+      <italic>true</italic>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgba(255, 255, 255, 100);
+background-image: url(:/crown_generate/15.jpg);
+width:150px;
+border: 2px inset grey; padding: 10px;
+</string>
+    </property>
+    <property name="text">
+     <string>6</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="tooth_5">
+    <property name="geometry">
+     <rect>
+      <x>60</x>
+      <y>300</y>
+      <width>100</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>100</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>22</pointsize>
+      <italic>true</italic>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgba(255, 255, 255, 100);
+background-image: url(:/crown_generate/15.jpg);
+width:150px;
+border: 2px inset grey; padding: 10px;
+
+</string>
+    </property>
+    <property name="text">
+     <string>5</string>
+    </property>
+   </widget>
+   <widget class="QRadioButton" name="tooth_4">
+    <property name="geometry">
+     <rect>
+      <x>60</x>
+      <y>230</y>
+      <width>100</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>100</width>
+      <height>50</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Arial</family>
+      <pointsize>22</pointsize>
+      <italic>true</italic>
+      <underline>false</underline>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="tabletTracking">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgba(255, 255, 255, 100);
+background-image: url(:/crown_generate/15.jpg);
+width:100px;
+border: 2px inset grey; padding: 10px;
+
+</string>
+    </property>
+    <property name="text">
+     <string>4</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources>
+  <include location="crown_generate.qrc/crown_generate.qrc"/>
+ </resources>
+ <connections>
+  <connection>
+   <sender>btn_upper</sender>
+   <signal>clicked()</signal>
+   <receiver>CrownGenerate</receiver>
+   <slot>btn_upper_click()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>524</x>
+     <y>254</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>624</x>
+     <y>522</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>btn_upper_click()</slot>
+ </slots>
+</ui>
