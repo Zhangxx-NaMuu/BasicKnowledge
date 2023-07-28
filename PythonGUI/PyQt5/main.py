@@ -26,8 +26,8 @@ from tkinter import Label, Button, Toplevel
 import tkinter as tk
 
 
-# # 注意：ui界面文件是个对话框，那么MyApp就必须继承 QDialog
-# # 类似的，若ui界面文件是个MainWindow，那么MyApp就必须继承 QMainWindow
+# 注意：ui界面文件是个对话框，那么MyApp就必须继承 QDialog
+# 类似的，若ui界面文件是个MainWindow，那么MyApp就必须继承 QMainWindow
 class MyWindow(QMainWindow, Ui_CrownGenerate):
 
     def __init__(self):
