@@ -15,8 +15,12 @@
 # """
 # __author__ = 'zxx'
 #
+import ctypes
 import os
+import shlex
 import sys
+
+import trimesh
 from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QLabel, QFileDialog
 from crown_generate import Ui_CrownGenerate
 from PyQt5 import QtCore
@@ -24,6 +28,7 @@ from PyQt5 import QtCore
 from bcg import *
 from tkinter import Label, Button, Toplevel
 import tkinter as tk
+import subprocess
 
 
 # 注意：ui界面文件是个对话框，那么MyApp就必须继承 QDialog
@@ -68,7 +73,7 @@ class MyWindow(QMainWindow, Ui_CrownGenerate):
             if self.folder_path:
                 print("选择的文件夹路径为:", self.folder_path)
                 widget.hide()
-                # self.main()
+                self.fun()
 
         root = tk.Tk()
         root.withdraw()
@@ -98,7 +103,7 @@ class MyWindow(QMainWindow, Ui_CrownGenerate):
             if self.folder_path:
                 print("选择的文件夹路径为:", self.folder_path)
                 widget.hide()
-                # self.main()
+                self.fun()
 
         root = tk.Tk()
         # root.geometry('667x500')
@@ -127,7 +132,11 @@ class MyWindow(QMainWindow, Ui_CrownGenerate):
         print(self.toothNumber)
 
     def fun(self):
-        return self.folder_path
+        """
+        调用.exe文件
+        :return:
+        """
+        os.system(r"path.exe")
 
 
 if __name__ == "__main__":
