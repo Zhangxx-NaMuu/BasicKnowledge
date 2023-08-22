@@ -132,7 +132,13 @@ if __name__ == '__main__':
     # noise_points = np.random.multivariate_normal(scaled_mean, cov, 20000)
     p4 = trimesh.PointCloud(scaled_point_cloud)
 
+    # 采用sigma
+    queries = grid_coords[in_idx] + 0.1 * np.random.randn(grid_coords[in_idx].shape[0], 3)
+    grid_coords1 = queries[:, 0:3]
+    p6 = trimesh.PointCloud(grid_coords1)
+
     p = trimesh.PointCloud(grid_coords[in_idx])
+    # p6 = trimesh.PointCloud(grid_coords[out_idx])
     # p1 = trimesh.PointCloud(noise_points)
     p.visual.vertex_colors = [255, 0, 0]
     p1.visual.vertex_colors = [0, 255, 0]
@@ -140,4 +146,4 @@ if __name__ == '__main__':
     p3.visual.vertex_colors = [255, 255, 0]
     p4.visual.vertex_colors = [0, 255, 255]
     # pts = trimesh.PointCloud(input_pts)
-    trimesh.Scene([p,  p4]).show()
+    trimesh.Scene([p, p6]).show()
