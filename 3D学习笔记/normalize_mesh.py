@@ -61,22 +61,38 @@ def normalize_meshes_open3d(mesh):
 
 
 if __name__ == '__main__':
-    path = 'test_gum.ply'
-    mesh1 = trimesh.load(path)
-    mesh2 = o3d.io.read_triangle_mesh(path)
-    # 测试open3d 和 trimesh归一化的差别
-    mesh1, scale1, displacement1 = normalize_meshes_trimesh(mesh1)
-    mesh2, scale2, displacement2 = normalize_meshes_open3d(mesh2)
-    print(scale1, displacement1)
-    print(scale2, displacement2)
+    # path = 'test_gum.ply'
+    # mesh1 = trimesh.load(path)
+    # mesh2 = o3d.io.read_triangle_mesh(path)
+    # # 测试open3d 和 trimesh归一化的差别
+    # mesh1, scale1, displacement1 = normalize_meshes_trimesh(mesh1)
+    # mesh2, scale2, displacement2 = normalize_meshes_open3d(mesh2)
+    # print(scale1, displacement1)
+    # print(scale2, displacement2)
+    #
+    # mesh1.export(r'C:\Users\dell\Desktop\1.ply')
+    # o3d.io.write_triangle_mesh(r'C:\Users\dell\Desktop\2.ply', mesh2)
+    #
+    # # 还原归一化后的模型
+    # mesh1.apply_scale(float(scale1))
+    # mesh1.apply_translation(-displacement1)
+    # mesh2.scale(scale2, center=[0, 0, 0])
+    # mesh2.translate(-displacement2)
+    # mesh1.export(r'C:\Users\dell\Desktop\3.ply')
+    # o3d.io.write_triangle_mesh(r'C:\Users\dell\Desktop\4.ply', mesh2)
 
-    mesh1.export(r'C:\Users\dell\Desktop\1.ply')
-    o3d.io.write_triangle_mesh(r'C:\Users\dell\Desktop\2.ply', mesh2)
+    import vedo
 
-    # 还原归一化后的模型
-    mesh1.apply_scale(float(scale1))
-    mesh1.apply_translation(-displacement1)
-    mesh2.scale(scale2, center=[0, 0, 0])
-    mesh2.translate(-displacement2)
-    mesh1.export(r'C:\Users\dell\Desktop\3.ply')
-    o3d.io.write_triangle_mesh(r'C:\Users\dell\Desktop\4.ply', mesh2)
+    mesh_path = 'test_gum.ply'
+    mesh = vedo.load(mesh_path)
+    vertices = mesh.points()  # 顶点
+    faces = mesh.faces()  # 面片索引
+
+    # 已知顶点和面片，组成mesh
+    mesh1 = vedo.Mesh([vertices, faces])
+
+    # 可视化mesh
+    vp = vedo.Plotter(N=2)
+    vp.at(0).show([mesh])
+    vp.at(1).show([mesh1])
+    vp.interactive().close()
