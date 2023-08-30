@@ -27,8 +27,24 @@ mesh1 = o3d.geometry.TriangleMesh()
 mesh1.vertices = o3d.utility.Vector3dVector(vertices)
 mesh1.triangles = o3d.utility.Vector3iVector(faces)
 
+# 计算轴对齐包围盒, 获取最大最小边界
+bounds = mesh.get_axis_aligned_bounding_box()
+min_bound = bounds.get_min_bound()
+max_bound = bounds.get_max_bound()
+# 创建轴对齐包围盒
+box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
+
+# 获取mesh中心
+center = box.get_center()
+
+# 将mesh平移到世界坐标中心
+box = box.translate(-center)
+
+# 利用box裁剪mesh
+clipped_mesh = mesh.crop(box)
+
 # 可视化mesh 
-o3d.visualization.draw_geometries([mesh, mesh1])
+o3d.visualization.draw_geometries([mesh, mesh1, clipped_mesh, box])
 
 # 输出mesh
 o3d.io.write_triangle_mesh('test_gum.ply', mesh)
@@ -38,6 +54,7 @@ o3d.io.write_triangle_mesh('test_gum.ply', mesh)
 
 ```python
 import trimesh
+import numpy as np
 mesh_path = 'test_gum.ply'
 mesh = trimesh.load(mesh_path)
 vertices = mesh.vertices  # 顶点
@@ -46,8 +63,26 @@ faces = mesh.faces # 面片索引
 # 已知顶点和面片，组成mesh
 mesh1 = trimesh.Trimesh(vertices, faces)
 
+# 计算轴对齐包围盒, 获取最大最小边界
+bounds = mesh.bounds()
+
+# 获取mesh中心
+center = mesh.bounding_box.centroid
+
+# 将mesh平移到世界坐标中心
+mesh.apply_translation(-center)
+
+# 创建包围盒
+extents, t = trimesh.bounds.to_extents(
+                [np.array([bounds[0][0] - 9, bounds[0][1] - 9, bounds[0][2]]),
+                 np.array([bounds[1][0] + 9, bounds[1][1] + 9, bounds[1][2] + 5])])
+
+box = trimesh.creation.box(extents=extents, transform=t)
+# 利用box裁剪mesh
+clipped_mesh = mesh.slice_plane(box.facets_origin, -box.facets_normal)
+
 # 可视化mesh
-trimesh.Scene([mesh, mesh1]).show()
+trimesh.Scene([mesh, mesh1, box, clipped_mesh]).show()
 ```
 
 ### <font face="微软雅黑" color=green size=5>vedo</font>
