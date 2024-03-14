@@ -102,6 +102,20 @@ vp = vedo.Plotter(N=2)
 vp.at(0).show([mesh])
 vp.at(1).show([mesh1])
 vp.interactive().close()
+
+# vedo 体素化
+import numpy as np
+from vedo import show
+data_matrix = np.zeros([10, 10, 10], dtype=np.uint8)
+data_matrix[:3, :3, :3] = 1
+data_matrix[3:7, 3:7, 3:7] = 8
+data_matrix[7:10, 7:10, 7:10] = 15
+
+vol = vedo.Volume(data_matrix).legosurface(vmin=1, vmax=15, boundary=True)
+# vol.cmap(['white', 'b', 'g', 'r']).mode(1)
+vol.add_scalarbar()
+show(vol).close()
+
 ```
 
 ## <font face="微软雅黑" color=green size=5>trimesh&open3d采样</font>
