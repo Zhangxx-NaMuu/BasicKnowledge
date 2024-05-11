@@ -118,6 +118,17 @@ show(vol).close()
 
 ```
 
+### <font face="微软雅黑" color="red" size=5>计算每个面片的中心点（质心）
+
+![img.png](image/面片质心.png)
+```python
+import vedo 
+mesh = vedo.load(r"path")
+# 计算每个面片的质心
+m_cell_center = mesh.cell_centers   # 效果如上图所示
+# 转换成点云格式
+pcd = vedo.Points(m_cell_center)
+```
 ## <font face="微软雅黑" color=green size=5>trimesh&open3d采样</font>
 
 ```
@@ -126,4 +137,16 @@ mesh_co_pcd = inputs.sample(pcd_samples_num)
 # open3d
 mesh_co_pcd = inputs.sample_points_uniformly(number_of_points=pcd_samples_num)
 mesh_co_pcd = np.asarray(mesh_co_pcd.points)
+```
+
+## <font face="微软雅黑" color=green size=5>颜色映射</font>
+```python
+import trimesh 
+mesh = trimesh.load(r"path")
+label =[1, 1, 2, 3, 4]  # 网格面片的标签
+colormap_hex = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8']  # 十六进制颜色
+colormap = [trimesh.visual.color.hex_to_rgba(i) for i in colormap_hex]
+colors = [colormap[int(label[i])] for i in range(len(label))]
+mesh = trimesh.Trimesh(vertices=mesh.points, faces=mesh.faces, face_colors=colors)
+
 ```
