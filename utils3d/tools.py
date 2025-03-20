@@ -1916,3 +1916,55 @@ class A_Star:
 
         # 开放队列空，无路径
         return None
+
+
+def compute_average_direction_vector_three_crown(v1_start, v1_end, v2_start, v2_end):
+    """
+    Args:
+        v1_start (tuple): 向量v₁的起始点坐标(x1, y1, z1)
+        v1_end (tuple): 向量v₁的终点坐标(x2, y2, z2)
+        v2_start (tuple): 向量v₂的起始点坐标(x3, y3, z3)
+        v2_end (tuple): 向量v₂的终点坐标(x4, y4, z4)
+    :return: tuple: 平均方向向量的单位向量坐标
+    """
+    import matplotlib.pyplot as plt
+    # 计算向量v1
+    v1 = np.array([v1_end[0] - v1_start[0], v1_end[1] - v1_start[1], v1_end[2] - v1_start[2]])
+    # 计算向量v2
+    v2 = np.array([v2_end[0] - v2_start[0], v2_end[1] - v2_start[1], v2_end[2] - v2_start[2]])
+    # 计算向量v1的模
+    v1_mod = np.linalg.norm(v1)
+    # 计算向量v2的模
+    v2_mod = np.linalg.norm(v2)
+
+    if v1_mod == 0 or v2_mod == 0:
+        return 0, 0, 0  # 避免除以0
+    # 计算向量v1和v2的单位向量
+    v1_unit = v1 / v1_mod
+    v2_unit = v2 / v2_mod
+    # 向量相加
+    v_sum = v1_unit + v2_unit
+    # 计算向量v_sum的模
+    v_sum_mod = np.linalg.norm(v_sum)
+    # 计算向量v_sum的单位向量
+    v_sum_unit = v_sum / v_sum_mod
+
+    return v_sum_unit, v1_unit, v2_unit
+# test rts = self.transformer_vec_to_z(v_sum_unit)
+def transformer_vec_to_z(v):
+    # 计算夹角
+    theta = np.arccos(np.dot(v, [0, 0, 1]) / (np.linalg.norm(v) * np.linalg.norm([0, 0, 1])))
+
+    # 计算旋转轴
+    axis = np.cross(v, [0, 0, 1])
+    axis = axis / np.linalg.norm(axis)
+
+    # 构建旋转矩阵
+    c, s = np.cos(theta), np.sin(theta)
+    rot_maxtrix = np.array([[c + axis[0] ** 2 * (1 - c), axis[0] * axis[1] * (1 - c) - axis[2] * s,
+                             axis[0] * axis[2] * (1 - c) + axis[1] * s],
+                            [axis[1] * axis[0] * (1 - c) + axis[2] * s, c + axis[1] ** 2 * (1 - c),
+                             axis[1] * axis[2] * (1 - c) - axis[0] * s],
+                            [axis[2] * axis[0] * (1 - c) - axis[1] * s, axis[2] * axis[1] * (1 - c)
+                             + axis[0] * s, c + axis[2] ** 2 * (1 - c)]])
+    return rot_maxtrix
