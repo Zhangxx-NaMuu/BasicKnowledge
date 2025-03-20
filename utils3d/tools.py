@@ -1352,3 +1352,567 @@ def equidistant_mesh(mesh, d=-0.01, merge=True):
         return vedo.merge([mesh, offset_mesh])
     else:
         return offset_mesh
+
+
+def voxel2array(grid_index_array, voxel_size=32):
+    """
+    将 voxel_grid_index 数组转换为固定大小的三维数组。
+
+    该函数接收一个形状为 (N, 3) 的 voxel_grid_index 数组，
+    并将其转换为形状为 (voxel_size, voxel_size, voxel_size) 的三维数组。
+    其中，原 voxel_grid_index 数组中每个元素代表三维空间中的一个网格索引，
+    在转换后的三维数组中对应位置的值会被设为 1，其余位置为 0。
+
+    Args:
+        grid_index_array (numpy.ndarray): 形状为 (N, 3) 的数组，
+            通常从 open3d 的 o3d.voxel_grid.get_voxels() 方法获取，
+            表示三维空间中每个体素的网格索引。
+        voxel_size (int, optional): 转换后三维数组的边长，默认为 32。
+
+    Returns:
+        numpy.ndarray: 形状为 (voxel_size, voxel_size, voxel_size) 的三维数组，
+            其中原 voxel_grid_index 数组对应的网格索引位置值为 1，其余为 0。
+
+    Example:
+        ```python
+        # 获取 grid_index_array
+        voxel_list = voxel_grid.get_voxels()
+        grid_index_array = list(map(lambda x: x.grid_index, voxel_list))
+        grid_index_array = np.array(grid_index_array)
+        voxel_grid_array = voxel2array(grid_index_array, voxel_size=32)
+        grid_index_array = array2voxel(voxel_grid_array)
+        pointcloud_array = grid_index_array  # 0.03125 是体素大小
+        pc = o3d.geometry.PointCloud()
+        pc.points = o3d.utility.Vector3dVector(pointcloud_array)
+        o3d_voxel = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.05)
+        o3d.visualization.draw_geometries([pcd, cc, o3d_voxel])
+        ```
+    """
+    array_voxel = np.zeros((voxel_size, voxel_size, voxel_size))
+    array_voxel[grid_index_array[:, 0], grid_index_array[:, 1], grid_index_array[:, 2]] = 1
+    return array_voxel
+
+
+def array2voxel(voxel_array):
+    """
+        将固定大小的三维数组转换为 voxel_grid_index 数组。
+        该函数接收一个形状为 (voxel_size, voxel_size, voxel_size) 的三维数组，
+        找出其中值为 1 的元素的索引，将这些索引组合成一个形状为 (N, 3) 的数组，
+        类似于从 open3d 的 o3d.voxel_grid.get_voxels () 方法获取的结果。
+
+    Args:
+        voxel_array (numpy.ndarray): 形状为 (voxel_size, voxel_size, voxel_size) 的三维数组，数组中值为 1 的位置代表对应的体素网格索引。
+
+    Returns:
+
+        numpy.ndarray: 形状为 (N, 3) 的数组，表示三维空间中每个体素的网格索引，类似于从 o3d.voxel_grid.get_voxels () 方法获取的结果。
+
+    Example:
+
+        ```python
+
+        # 获取 grid_index_array
+        voxel_list = voxel_grid.get_voxels()
+        grid_index_array = list(map(lambda x: x.grid_index, voxel_list))
+        grid_index_array = np.array(grid_index_array)
+        voxel_grid_array = voxel2array(grid_index_array, voxel_size=32)
+        grid_index_array = array2voxel(voxel_grid_array)
+        pointcloud_array = grid_index_array  # 0.03125 是体素大小
+        pc = o3d.geometry.PointCloud()
+        pc.points = o3d.utility.Vector3dVector(pointcloud_array)
+        o3d_voxel = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.05)
+        o3d.visualization.draw_geometries([pcd, cc, o3d_voxel])
+
+
+        ```
+
+    """
+    x, y, z = np.where(voxel_array == 1)
+    index_voxel = np.vstack((x, y, z))
+    grid_index_array = index_voxel.T
+    return grid_index_array
+
+
+def homogenizing_mesh(vedo_mesh, target_num=10000):
+    """
+    对给定的 vedo 网格进行均质化处理，使其达到指定的目标面数。
+
+    该函数使用 pyacvd 库中的 Clustering 类对输入的 vedo 网格进行处理。
+    如果网格的顶点数小于等于目标面数，会先对网格进行细分，然后进行聚类操作，
+    最终生成一个面数接近目标面数的均质化网格。
+
+    Args:
+        vedo_mesh (vedo.Mesh): 输入的 vedo 网格对象，需要进行均质化处理的网格。
+        target_num (int, optional): 目标面数，即经过处理后网格的面数接近该值。
+            默认为 10000。
+
+    Returns:
+        vedo.Mesh: 经过均质化处理后的 vedo 网格对象，其面数接近目标面数。
+
+    Notes:
+        该函数依赖于 pyacvd 和 pyvista 库，使用前请确保这些库已正确安装。
+
+    """
+    from pyacvd import Clustering
+    from pyvista import wrap
+    print(" Clustering target_num:{}".format(target_num))
+    clus = Clustering(wrap(vedo_mesh.dataset))
+    if vedo_mesh.npoints <= target_num:
+        clus.subdivide(3)
+    clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
+    return vedo.Mesh(clus.create_mesh())
+
+
+def fill_hole_with_center(mesh, boundaries, return_vf=False):
+    """
+        用中心点方式强制补洞
+
+    Args:
+        mesh (_type_): vedo.Mesh
+        boundaries:vedo.boundaries
+        return_vf: 是否返回补洞的mesh
+
+
+    """
+    vertices = mesh.vertices.copy()
+    cells = mesh.cells
+
+    # 获取孔洞边界的顶点坐标
+    boundaries = boundaries.join(reset=True)
+    if not boundaries:
+        return mesh  # 没有孔洞
+    pts_coords = boundaries.vertices
+
+    # 将孔洞顶点坐标转换为原始顶点的索引
+    hole_indices = []
+    for pt in pts_coords:
+        distances = np.linalg.norm(vertices - pt, axis=1)
+        idx = np.argmin(distances)
+        if distances[idx] < 1e-6:
+            hole_indices.append(idx)
+        else:
+            raise ValueError("顶点坐标未找到")
+
+    n = len(hole_indices)
+    if n < 3:
+        return mesh  # 无法形成面片
+
+    # 计算中心点并添加到顶点
+    center = np.mean(pts_coords, axis=0)
+    new_vertices = np.vstack([vertices, center])
+    center_idx = len(vertices)
+
+    # 生成新的三角形面片
+    new_faces = []
+    for i in range(n):
+        v1 = hole_indices[i]
+        v2 = hole_indices[(i + 1) % n]
+        new_faces.append([v1, v2, center_idx])
+
+    if return_vf:
+        return vedo.Mesh([new_vertices, new_faces]).clean()
+    # 合并面片并创建新网格
+    updated_cells = np.vstack([cells, new_faces])
+    new_mesh = vedo.Mesh([new_vertices, updated_cells])
+    return new_mesh.clean()
+
+
+def collision_depth(mesh1, mesh2) -> float:
+    """计算两个网格间的碰撞深度或最小间隔距离。
+
+    使用VTK的带符号距离算法检测碰撞状态：
+    - 正值：两网格分离，返回值为最近距离
+    - 零值：表面恰好接触
+    - 负值：发生穿透，返回值为最大穿透深度（绝对值）
+
+    Args:
+        mesh1 (vedo.Mesh): 第一个网格对象，需包含顶点数据
+        mesh2 (vedo.Mesh): 第二个网格对象，需包含顶点数据
+
+    Returns:
+        float: 带符号的距离值，符号表示碰撞状态，绝对值表示距离量级
+
+    Raises:
+        RuntimeError: 当VTK计算管道出现错误时抛出
+
+    Notes:
+        1. 当输入网格顶点数>1000时会产生性能警告
+        2. 返回float('inf')表示计算异常或无限远距离
+
+    """
+    # 性能优化提示
+    if mesh1.npoints > 1000 or mesh2.npoints > 1000:
+        print("[性能警告] 检测到高精度网格(顶点数>1000)，建议执行 mesh.decimate(n=500) 进行降采样")
+
+    try:
+        # 初始化VTK距离计算器
+        distance_filter = vtk.vtkDistancePolyDataFilter()
+        distance_filter.SetInputData(0, mesh1.dataset)
+        distance_filter.SetInputData(1, mesh2.dataset)
+        distance_filter.SignedDistanceOn()
+        distance_filter.Update()
+
+        # 提取距离数据
+        distance_array = distance_filter.GetOutput().GetPointData().GetScalars("Distance")
+        if not distance_array:
+            return float('inf')
+
+        return distance_array.GetRange()[0]
+
+    except Exception as e:
+        raise RuntimeError(f"VTK距离计算失败: {str(e)}") from e
+
+
+def compute_curvature_by_meshlab(ms):
+    """
+    使用 MeshLab 计算网格的曲率和顶点颜色。
+
+    该函数接收一个顶点矩阵和一个面矩阵作为输入，创建一个 MeshLab 的 MeshSet 对象，
+    并将输入的顶点和面添加到 MeshSet 中。然后，计算每个顶点的主曲率方向，
+    最后获取顶点颜色矩阵和顶点曲率数组。
+
+    Args:
+        ms: pymeshlab格式mesh;
+
+    Returns:
+        - vertex_colors (numpy.ndarray): 顶点颜色矩阵，形状为 (n, 3)，其中 n 是顶点的数量。
+            每个元素的范围是 [0, 255]，表示顶点的颜色。
+        - vertex_curvature (numpy.ndarray): 顶点曲率数组，形状为 (n,)，其中 n 是顶点的数量。
+            每个元素表示对应顶点的曲率。
+        - mesh: pymeshlab格式ms
+
+    """
+    ms.compute_curvature_principal_directions_per_vertex()
+    curr_ms = ms.current_mesh()
+    vertex_colors = curr_ms.vertex_color_matrix() * 255
+    vertex_curvature = curr_ms.vertex_scalar_array()
+    return vertex_colors, vertex_curvature, ms
+
+
+def compute_curvature_by_igl(v, f):
+    """
+    用igl计算平均曲率并归一化
+
+    Args:
+        v: 顶点;
+        f: 面片:
+
+    Returns:
+        - vertex_curvature (numpy.ndarray): 顶点曲率数组，形状为 (n,)，其中 n 是顶点的数量。
+            每个元素表示对应顶点的曲率。
+
+
+    """
+    try:
+        import igl
+    except ImportError:
+        print("请安装igl, pip install libigl")
+    _, _, K, _ = igl.principal_curvature(v, f)
+    K_normalized = (K - K.min()) / (K.max() - K.min())
+    return K_normalized
+
+
+def harmonic_by_igl(v, f, map_vertices_to_circle=True):
+    """
+    谐波参数化后的2D网格
+
+    Args:
+        v (_type_): 顶点
+        f (_type_): 面片
+        map_vertices_to_circle: 是否映射到圆形（正方形)
+
+    Returns:
+        uv,v_p: 创建参数化后的2D网格,3D坐标
+
+    Note:
+
+        ```
+
+        # 创建空间索引
+        uv_kdtree = KDTree(uv)
+
+        # 初始化可视化系统
+        plt = Plotter(shape=(1, 2), axes=False, title="Interactive Parametrization")
+
+        # 创建网格对象
+        mesh_3d = Mesh([v, f]).cmap("jet", calculate_curvature(v, f)).lighting("glossy")
+        mesh_2d = Mesh([v_p, f]).wireframe(True).cmap("jet", calculate_curvature(v, f))
+
+        # 存储选中标记
+        markers_3d = []
+        markers_2d = []
+
+        def on_click(event):
+            if not event.actor or event.actor not in [mesh_2d, None]:
+                return
+            if not hasattr(event, 'picked3d') or event.picked3d is None:
+                return
+
+            try:
+                # 获取点击坐标
+                uv_click = np.array(event.picked3d[:2])
+
+                # 查找最近顶点
+                _, idx = uv_kdtree.query(uv_click)
+                v3d = v[idx]
+                uv_point = uv[idx]  # 获取对应2D坐标
+
+
+                # 创建3D标记（使用球体）
+                marker_3d = Sphere(v3d, r=0.1, c='cyan', res=12)
+                markers_3d.append(marker_3d)
+
+                # 创建2D标记（使用大号点）
+                marker_2d = Point(uv_point, c='magenta', r=10, alpha=0.8)
+                markers_2d.append(marker_2d)
+
+                # 更新视图
+                plt.at(0).add(marker_3d)
+                plt.at(1).add(marker_2d)
+                plt.render()
+
+            except Exception as e:
+                print(f"Error processing click: {str(e)}")
+
+        plt.at(0).show(mesh_3d, "3D Visualization", viewup="z")
+        plt.at(1).show(mesh_2d, "2D Parametrization").add_callback('mouse_click', on_click)
+        plt.interactive().close()
+
+
+        ```
+
+    """
+    try:
+        import igl
+    except ImportError:
+        print("请安装igl, pip install libigl")
+
+    # 正方形边界映射）
+    def map_to_square(bnd):
+        n = len(bnd)
+        quarter = n // 4
+        uv = np.zeros((n, 2))
+        for i in range(n):
+            idx = i % quarter
+            side = i // quarter
+            t = idx / (quarter - 1)
+            if side == 0:
+                uv[i] = [1, t]
+            elif side == 1:
+                uv[i] = [1 - t, 1]
+            elif side == 2:
+                uv[i] = [0, 1 - t]
+            else:
+                uv[i] = [t, 0]
+        return uv
+
+    try:
+        # 参数化
+        bnd = igl.boundary_loop(f)
+        if map_vertices_to_circle:
+            bnd_uv = igl.map_vertices_to_circle(v, bnd)  # 圆形参数化
+        else:
+            bnd_uv = map_to_square(bnd)  # 正方形参数化
+        uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
+    except Exception as e:
+        print(f"生成错误，请检测连通体数量，{e}")
+    # 创建参数化后的2D网格（3D坐标）
+    v_p = np.hstack([uv, np.zeros((uv.shape[0], 1))])
+
+    return uv, v_p
+
+
+def hole_filling_by_Radial(boundary_coords):
+    """
+    参考
+
+    [https://www.cnblogs.com/shushen/p/5759679.html]
+
+    实现的最小角度法补洞法；
+
+    Args:
+        boundary_coords (_type_): 有序边界顶点
+
+    Returns:
+        v,f: 修补后的曲面
+
+
+    Note:
+        ```python
+
+        # 创建带孔洞的简单网格
+        s = vedo.load(r"J10166160052_16.obj")
+        # 假设边界点即网格边界点
+        boundary =vedo.Spline((s.boundaries().join(reset=True).vertices),res=100)
+        # 通过边界点进行补洞
+        filled_mesh =vedo.Mesh(hole_filling(boundary.vertices))
+        # 渲染补洞后的曲面
+        vedo.show([filled_mesh,boundary,s.alpha(0.8)], bg='white').close()
+
+        ```
+
+    """
+    # 初始化顶点列表和边界索引
+    vertex_list = np.array(boundary_coords.copy())
+    boundary = list(range(len(vertex_list)))  # 存储顶点在vertex_list中的索引
+    face_list = []
+
+    while len(boundary) >= 3:
+        # 1. 计算平均边长
+        avg_length = 0.0
+        n_edges = len(boundary)
+        for i in range(n_edges):
+            curr_idx = boundary[i]
+            next_idx = boundary[(i + 1) % n_edges]
+            avg_length += np.linalg.norm(vertex_list[next_idx] - vertex_list[curr_idx])
+        avg_length /= n_edges
+
+        # 2. 寻找最小内角顶点在边界列表中的位置
+        min_angle = float('inf')
+        min_idx = 0  # 默认取第一个顶点
+        for i in range(len(boundary)):
+            prev_idx = boundary[(i - 1) % len(boundary)]
+            curr_idx = boundary[i]
+            next_idx = boundary[(i + 1) % len(boundary)]
+
+            v1 = vertex_list[prev_idx] - vertex_list[curr_idx]
+            v2 = vertex_list[next_idx] - vertex_list[curr_idx]
+            # 检查向量长度避免除以零
+            v1_norm = np.linalg.norm(v1)
+            v2_norm = np.linalg.norm(v2)
+            if v1_norm == 0 or v2_norm == 0:
+                continue  # 跳过无效顶点
+            cos_theta = np.dot(v1, v2) / (v1_norm * v2_norm)
+            angle = np.arccos(np.clip(cos_theta, -1, 1))
+            if angle < min_angle:
+                min_angle = angle
+                min_idx = i  # 记录边界列表中的位置
+
+        # 3. 获取当前处理的三个顶点索引
+        curr_pos = min_idx
+        prev_pos = (curr_pos - 1) % len(boundary)
+        next_pos = (curr_pos + 1) % len(boundary)
+
+        prev_idx = boundary[prev_pos]
+        curr_idx = boundary[curr_pos]
+        next_idx = boundary[next_pos]
+
+        # 计算前驱和后继顶点的距离
+        dist = np.linalg.norm(vertex_list[next_idx] - vertex_list[prev_idx])
+
+        # 4. 根据距离决定添加三角形的方式
+        if dist < 2 * avg_length:
+            # 添加单个三角形
+            face_list.append([prev_idx, curr_idx, next_idx])
+            # 从边界移除当前顶点
+            boundary.pop(curr_pos)
+        else:
+            # 创建新顶点并添加到顶点列表
+            new_vertex = (vertex_list[prev_idx] + vertex_list[next_idx]) / 2
+            vertex_list = np.vstack([vertex_list, new_vertex])
+            new_idx = len(vertex_list) - 1
+
+            # 添加两个三角形
+            face_list.append([prev_idx, curr_idx, new_idx])
+            face_list.append([curr_idx, next_idx, new_idx])
+
+            # 更新边界：替换当前顶点为新顶点
+            boundary.pop(curr_pos)
+            boundary.insert(curr_pos, new_idx)
+
+    return vertex_list, face_list
+
+
+class A_Star:
+    def __init__(self, vertices, faces):
+        """
+        使用A*算法在三维三角网格中寻找最短路径
+
+        参数：
+        vertices: numpy数组，形状为(N,3)，表示顶点坐标
+        faces: numpy数组，形状为(M,3)，表示三角形面的顶点索引
+
+        """
+        self.adj = self.build_adjacency(faces)
+        self.vertices = vertices
+
+    def build_adjacency(self, faces):
+        """构建顶点的邻接表"""
+        from collections import defaultdict
+        adj = defaultdict(set)
+        for face in faces:
+            for i in range(3):
+                u = face[i]
+                v = face[(i + 1) % 3]
+                adj[u].add(v)
+                adj[v].add(u)
+        return {k: list(v) for k, v in adj.items()}
+
+    def run(self, start_idx, end_idx, vertex_weights=None):
+        """
+        使用A*算法在三维三角网格中寻找最短路径
+
+        参数：
+        start_idx: 起始顶点的索引
+        end_idx: 目标顶点的索引
+        vertex_weights: 可选，形状为(N,)，顶点权重数组，默认为None
+
+        返回：
+        path: 列表，表示从起点到终点的顶点索引路径，若不可达返回None
+        """
+        import heapq
+        end_coord = self.vertices[end_idx]
+
+        # 启发式函数（当前顶点到终点的欧氏距离）
+        def heuristic(idx):
+            return np.linalg.norm(self.vertices[idx] - end_coord)
+
+        # 优先队列：(f, g, current_idx)
+        open_heap = []
+        heapq.heappush(open_heap, (heuristic(start_idx), 0, start_idx))
+
+        # 记录各顶点的g值和父节点
+        g_scores = {start_idx: 0}
+        parents = {}
+        closed_set = set()
+
+        while open_heap:
+            current_f, current_g, current_idx = heapq.heappop(open_heap)
+
+            # 若当前节点已处理且有更优路径，跳过
+            if current_idx in closed_set:
+                if current_g > g_scores.get(current_idx, np.inf):
+                    continue
+            # 找到终点，回溯路径
+            if current_idx == end_idx:
+                path = []
+                while current_idx is not None:
+                    path.append(current_idx)
+                    current_idx = parents.get(current_idx)
+                return path[::-1]
+
+            closed_set.add(current_idx)
+
+            # 遍历邻接顶点
+            for neighbor in self.adj.get(current_idx, []):
+                if neighbor in closed_set:
+                    continue
+
+                # 计算移动代价
+                distance = np.linalg.norm(self.vertices[current_idx] - self.vertices[neighbor])
+                if vertex_weights is not None:
+                    cost = distance * vertex_weights[neighbor]
+                else:
+                    cost = distance
+
+                tentative_g = current_g + cost
+
+                # 更新邻接顶点的g值和父节点
+                if tentative_g < g_scores.get(neighbor, np.inf):
+                    parents[neighbor] = current_idx
+                    g_scores[neighbor] = tentative_g
+                    f = tentative_g + heuristic(neighbor)
+                    heapq.heappush(open_heap, (f, tentative_g, neighbor))
+
+        # 开放队列空，无路径
+        return None
