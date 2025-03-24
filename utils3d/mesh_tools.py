@@ -283,8 +283,23 @@ class Mesh:
 
         return "\n".join(stats)
 
-
-
+def sdf2mesh_by_diso(sdf,diffdmc=None ,deform=None,return_quads=False, normalize=True,isovalue=0 ,invert=True):
+    """
+    exampel:
+    occ = torch.tensor(occ.reshape((256,)*3)).to(device)
+    vertices, triangles = sdf2mesh_by_diso(sdf=occ, normalize=False)
+    vertices, triangles = vertices.cpu().numpy(), triangles.cpu().numpy()
+    """
+    try:
+        from diso import DiffDMC
+    except ImportError:
+        print("请安装 pip install diso")
+    if diffdmc is None:
+        diffdmc =DiffDMC(dtype=torch.float32).cuda()
+    if invert:
+        sdf*=-1
+    v, f = diffdmc(sdf, deform, return_quads=return_quads, normalize=normalize, isovalue=isovalue)
+    return v,f
 
 
 
