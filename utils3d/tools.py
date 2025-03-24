@@ -1968,3 +1968,22 @@ def transformer_vec_to_z(v):
                             [axis[2] * axis[0] * (1 - c) - axis[1] * s, axis[2] * axis[1] * (1 - c)
                              + axis[0] * s, c + axis[2] ** 2 * (1 - c)]])
     return rot_maxtrix
+
+def meshgrid3d(occ_size, pc_range):
+    """
+    pc_range: (x_min, y_min, z_min, x_max, y_max, z_max)
+    occ_size: occ分辨率
+    return: 归一化的三维坐标
+    """
+    W, H, D = occ_size
+
+    xs = torch.linspace(0.5, W - 0.5, W).view(W, 1, 1).expend(W, H, D) / W
+    ys = torch.linspace(0.5, H - 0.5, H).view(1, H, 1).expand(W, H, D) / H
+    zs = torch.linspace(0.5, D - 0.5, D).view(1, 1, D).expand(W, H, D) / D
+
+    xs = xs * (pc_range[3] - pc_range[0]) + pc_range[0]
+    ys = ys * (pc_range[4] - pc_range[1]) + pc_range[1]
+    zs = zs * (pc_range[5] - pc_range[2]) + pc_range[2]
+    xyz = torch.stack((xs, ys, zs), -1)
+
+    return xyz
