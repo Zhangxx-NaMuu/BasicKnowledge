@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from typing import Tuple, List, Union, Optional
-from einops import rearrange, repeat
 import torch.nn.functional as F
 
 
@@ -10,7 +9,7 @@ class FourierEmbedder(nn.Module):
     ```
     傅里叶变换(正弦/余弦位置)嵌入模块。给定形状为 [n_batch, ..., c_dim] 的输入张量 `x`，
     它将 `x[..., i]` 的每个特征维度转换为如下形式：
-
+    
         [
             sin(x[..., i]),
             sin(f_1*x[..., i]),
@@ -25,8 +24,8 @@ class FourierEmbedder(nn.Module):
             x[..., i]     # 仅当 include_input 为 True 时保留
         ]
     其中 f_i 表示频率。
-
-
+    
+    
 
     频率空间默认为 [0/num_freqs, 1/num_freqs, ..., (num_freqs-1)/num_freqs]。
     若 `logspace` 为 True，则频率按对数空间排列：f_i = [2^(0/num_freqs), 2^(1/num_freqs), ..., 2^((num_freqs-1)/num_freqs)]；
@@ -34,9 +33,9 @@ class FourierEmbedder(nn.Module):
     ```
     Args:
         num_freqs (int): 频率数量,默认为6;
-
+        
         logspace (bool): 是否使用对数空间频率。若为True，频率为 2^(i/num_freqs)；否则线性间隔，默认为True；
-
+        
         input_dim (int): 输入维度，默认为3；
         include_input (bool): 是否在输出中包含原始输入，默认为True；
         include_pi (bool): 是否将频率乘以π，默认为True。
@@ -87,10 +86,10 @@ class FourierEmbedder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播
-
+        
         Args:
             x: 输入张量，形状为 [..., dim]
-
+            
         Returns:
             embedding: 嵌入后的张量，形状为 [..., dim * (num_freqs*2 + temp)]，
                 其中 temp 为1（若包含输入）或0。
@@ -106,22 +105,24 @@ class FourierEmbedder(nn.Module):
         else:
             # 无频率时直接返回原输入
             return x
-
+        
+        
+        
 
 class DropPath(nn.Module):
     """随机深度（Stochastic Depth）模块，用于在残差块的主路径上随机丢弃样本路径。
-
+    
     该模块通过以概率 `drop_prob` 将输入张量置零（跳过当前残差块），同时根据 `scale_by_keep` 
     决定是否缩放输出值以保持期望不变。常用于正则化深层网络（如ResNet、Vision Transformer）。
-
+    
     Notes:
-
+    
         它与作者为 EfficientNet 等网络创建的 DropConnect 实现类似，但原来的名称具有误导性，
         因为 “Drop Connect” 在另一篇论文中是一种不同形式的丢弃技术。
         作者选择将层和参数名称更改为 “drop path”，
         而不是将 DropConnect 作为层名并使用 “survival rate（生存概率）” 作为参数。
         [https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956]
-
+        
 
     Args:
         drop_prob (float): 路径丢弃概率，取值范围 [0, 1)，默认为 0（不丢弃）。
@@ -180,6 +181,7 @@ class DropPath(nn.Module):
         return f'drop_prob={round(self.drop_prob, 3):0.3f}'
 
 
+
 class MLP(nn.Module):
     """多层感知机（MLP）模块，包含扩展投影、激活函数、收缩投影和可选的 DropPath 正则化。
 
@@ -205,16 +207,15 @@ class MLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播流程：扩展 -> 激活 -> 收缩 -> DropPath（若启用）"""
-        x = self.c_fc(x)  # 扩展维度
-        x = self.gelu(x)  # 激活函数
-        x = self.c_proj(x)  # 投影回目标维度
-        x = self.drop_path(x)  # 应用 DropPath（训练时随机丢弃路径）
+        x = self.c_fc(x)      # 扩展维度
+        x = self.gelu(x)      # 激活函数
+        x = self.c_proj(x)    # 投影回目标维度
+        x = self.drop_path(x) # 应用 DropPath（训练时随机丢弃路径）
         return x
-
 
 class QKVMultiheadCrossAttention(nn.Module):
     """基于查询（Query）、键值对（Key-Value）的多头交叉注意力计算模块。
-
+    
     通过将输入的 `q` 和 `kv` 分割为多头，应用缩放点积注意力（Scaled Dot-Product Attention），
     并可选对 Q/K 进行归一化处理。
 
@@ -258,6 +259,7 @@ class QKVMultiheadCrossAttention(nn.Module):
         k = self.k_norm(k)
 
         # 重排维度并计算注意力
+        from einops import rearrange
         q, k, v = map(lambda t: rearrange(t, 'b n h d -> b h n d', h=self.heads), (q, k, v))
         out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
         return out
@@ -283,7 +285,7 @@ class MultiheadCrossAttention(nn.Module):
         - 输出: (bs, n_ctx, width)
     """
 
-    def __init__(self, *, width: int, heads: int, qkv_bias: bool = True, n_data: Optional[int] = None,
+    def __init__(self, *, width: int, heads: int, qkv_bias: bool = True, n_data: Optional[int] = None, 
                  data_width: Optional[int] = None, norm_layer=nn.LayerNorm, qk_norm: bool = False):
         super().__init__()
         self.n_data = n_data
@@ -388,6 +390,7 @@ class QKVMultiheadAttention(nn.Module):
         k = self.k_norm(k)
 
         # 重排维度并计算注意力
+        from einops import rearrange
         q, k, v = map(lambda t: rearrange(t, 'b n h d -> b h n d', h=self.heads), (q, k, v))
         out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(bs, n_ctx, -1)
         return out
@@ -410,7 +413,7 @@ class MultiheadAttention(nn.Module):
         - 输出: (bs, n_ctx, width)
     """
 
-    def __init__(self, *, n_ctx: int, width: int, heads: int, qkv_bias: bool,
+    def __init__(self, *, n_ctx: int, width: int, heads: int, qkv_bias: bool, 
                  norm_layer=nn.LayerNorm, qk_norm: bool = False, drop_path_rate: float = 0.0):
         super().__init__()
         self.n_ctx = n_ctx
@@ -464,7 +467,7 @@ class ResidualAttentionBlock(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = x + self.attn(self.ln_1(x))  # 残差连接：自注意力
-        x = x + self.mlp(self.ln_2(x))  # 残差连接：MLP
+        x = x + self.mlp(self.ln_2(x))    # 残差连接：MLP
         return x
 
 
@@ -507,6 +510,7 @@ class Transformer(nn.Module):
         return x
 
 
+
 class CrossAttentionDecoder(nn.Module):
     """交叉注意力解码器模块，用于通过潜在变量（Latents）增强查询（Queries）的特征表示。
 
@@ -535,16 +539,16 @@ class CrossAttentionDecoder(nn.Module):
     """
 
     def __init__(
-            self,
-            *,
-            num_latents: int,
-            out_channels: int,
-            fourier_embedder: FourierEmbedder,
-            width: int,
-            heads: int,
-            qkv_bias: bool = True,
-            qk_norm: bool = False,
-            label_type: str = "binary"
+        self,
+        *,
+        num_latents: int,
+        out_channels: int,
+        fourier_embedder: FourierEmbedder,
+        width: int,
+        heads: int,
+        qkv_bias: bool = True,
+        qk_norm: bool = False,
+        label_type: str = "binary"
     ):
         super().__init__()
         self.fourier_embedder = fourier_embedder
@@ -578,12 +582,12 @@ class CrossAttentionDecoder(nn.Module):
         """
         # 傅里叶嵌入 + 投影（保持与潜在变量相同的数据类型）
         queries = self.query_proj(self.fourier_embedder(queries).to(latents.dtype))
-
+        
         # 残差交叉注意力交互
         x = self.cross_attn_decoder(queries, latents)
-
+        
         # 后处理与输出
         x = self.ln_post(x)
         occ = self.output_proj(x)  # 输出如占据概率、分类logits等
-
+        
         return occ

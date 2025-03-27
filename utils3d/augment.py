@@ -1,20 +1,3 @@
-# -*- coding: UTF-8 -*-
-"""
-==================================================
-@path   :BasicKnowledge -> augment
-@IDE    :PyCharm
-@Author :NaMuu
-@Email  :2458543125@qq.com
-@Date   :2025/3/27 15:51
-@Version: V0.1
-@License: (C)Copyright 2021-2023 , UP3D
-@Reference: 
-@History:
-- 2025/3/27 15:51:
-==================================================  
-"""
-__author__ = 'zxx'
-
 import numpy as np
 import math
 

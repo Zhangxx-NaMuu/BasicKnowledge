@@ -24,6 +24,12 @@ from typing import *
 from sklearn.decomposition import PCA
 from sindre.utils3d.algorithm import apply_transform, cut_mesh_point_loop
 
+import vedo
+import numpy as np
+from typing import *
+from sklearn.decomposition import PCA
+from sindre.utils3d.algorithm import apply_transform, cut_mesh_point_loop
+
 
 def convert_fdi2idx(labels):
     """
@@ -158,8 +164,8 @@ def cut_mesh_point_loop_crow(mesh, pts, error_show=True):
     min_dists = [np.min(batch_closest_dist(r.vertices, pts.vertices)) for r in regions]
     mesh = regions[np.argmin(min_dists)]
 
-    c1 = cut_mesh_point_loop(mesh, pts, invert=True)
-    c2 = cut_mesh_point_loop(mesh, pts, invert=False)
+    c1 = cut_mesh_point_loop(mesh, pts, invert=False)
+    c2 = cut_mesh_point_loop(mesh, pts, invert=True)
 
     c1_num = len(c1.boundaries().split())
     c2_num = len(c2.boundaries().split())
@@ -173,7 +179,7 @@ def cut_mesh_point_loop_crow(mesh, pts, error_show=True):
         print("裁剪失败,请检查分割线,尝试pts[::3]进行采样输入")
         if error_show:
             print(f"边界1:{c1_num},边界2：{c2_num}")
-            vedo.show([c1, c2], N=2).close()
+            vedo.show([(c1), (c2)], N=2).close()
         return None
 
     return cut_mesh
