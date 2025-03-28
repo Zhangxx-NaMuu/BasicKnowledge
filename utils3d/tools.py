@@ -1462,6 +1462,13 @@ def homogenizing_mesh(vedo_mesh, target_num=10000):
     clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
     return vedo.Mesh(clus.create_mesh())
 
+def generate_voxel_vertices(m=64):
+    """生成(-1,1)的立方体的体素顶点"""
+    x = np.linspace(-1, 1, m )
+    y = np.linspace(-1, 1, m)
+    z = np.linspace(-1, 1, m)
+    vertices =np.stack(np.meshgrid(x, y, z)).reshape(-1, 3)
+
 
 def fill_hole_with_center(mesh, boundaries, return_vf=False):
     """
