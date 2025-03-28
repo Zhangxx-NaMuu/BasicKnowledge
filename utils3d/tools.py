@@ -1468,6 +1468,7 @@ def generate_voxel_vertices(m=64):
     y = np.linspace(-1, 1, m)
     z = np.linspace(-1, 1, m)
     vertices =np.stack(np.meshgrid(x, y, z)).reshape(-1, 3)
+    return vertices
 
 
 def fill_hole_with_center(mesh, boundaries, return_vf=False):
