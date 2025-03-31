@@ -1462,14 +1462,37 @@ def homogenizing_mesh(vedo_mesh, target_num=10000):
     clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
     return vedo.Mesh(clus.create_mesh())
 
-def generate_voxel_vertices(m=64):
-    """生成(-1,1)的立方体的体素顶点"""
-    x = np.linspace(-1, 1, m )
-    y = np.linspace(-1, 1, m)
-    z = np.linspace(-1, 1, m)
+def generate_voxel_vertices(min_box, max_box, m=64):
+    """
+    生成(-1,1)的立方体的体素顶点
+    m:分辨率
+    """
+    x = np.linspace(min_box, max_box, m )
+    y = np.linspace(min_box, max_box, m)
+    z = np.linspace(min_box, max_box, m)
     vertices =np.stack(np.meshgrid(x, y, z)).reshape(-1, 3)
     return vertices
 
+def generate_dense_grid_points(bbox_min: np.ndarray, bbox_max: np.ndarray, octree_depth:int, indexing="xy"):
+    """
+    根据bbox_min和bbox_max生成三维点云
+
+    """
+    # 计算x, y, z的范围
+    length = bbox_max - bbox_min
+    # 计算分辨率：2**octree_depth
+    num_cells = np.exp2(octree_depth)
+    x = np.linspace(bbox_min[0], bbox_max[0], int(num_cells) + 1, dtype=np.float32)
+    y = np.linspace(bbox_min[1], bbox_max[1], int(num_cells) + 1, dtype=np.float32)
+    z = np.linspace(bbox_min[2], bbox_max[2], int(num_cells) + 1, dtype=np.float32)
+    # 当octree_depth=32时，形状：(3, 33, 33, 33)
+    [xs, ys, zs] = np.meshgrid(x, y, z, indexing=indexing)
+    # 形状（33*33*33，3）
+    xyz = np.stack((xs, ys, zs), axis=-1)
+    xyz = xyz.reshape(-1, 3)
+    # 形状[32, 32, 32]
+    grid_size = [int(num_cells) + 1, int(num_cells) + 1, int(num_cells) + 1]
+    return xyz, grid_size, length
 
 def fill_hole_with_center(mesh, boundaries, return_vf=False):
     """
