@@ -1462,18 +1462,20 @@ def homogenizing_mesh(vedo_mesh, target_num=10000):
     clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
     return vedo.Mesh(clus.create_mesh())
 
+
 def generate_voxel_vertices(min_box, max_box, m=64):
     """
     生成(-1,1)的立方体的体素顶点
     m:分辨率
     """
-    x = np.linspace(min_box, max_box, m )
+    x = np.linspace(min_box, max_box, m)
     y = np.linspace(min_box, max_box, m)
     z = np.linspace(min_box, max_box, m)
-    vertices =np.stack(np.meshgrid(x, y, z)).reshape(-1, 3)
+    vertices = np.stack(np.meshgrid(x, y, z)).reshape(-1, 3)
     return vertices
 
-def generate_dense_grid_points(bbox_min: np.ndarray, bbox_max: np.ndarray, octree_depth:int, indexing="xy"):
+
+def generate_dense_grid_points(bbox_min: np.ndarray, bbox_max: np.ndarray, octree_depth: int, indexing="xy"):
     """
     根据bbox_min和bbox_max生成三维点云
 
@@ -1493,6 +1495,7 @@ def generate_dense_grid_points(bbox_min: np.ndarray, bbox_max: np.ndarray, octre
     # 形状[32, 32, 32]
     grid_size = [int(num_cells) + 1, int(num_cells) + 1, int(num_cells) + 1]
     return xyz, grid_size, length
+
 
 def fill_hole_with_center(mesh, boundaries, return_vf=False):
     """
@@ -1981,6 +1984,8 @@ def compute_average_direction_vector_three_crown(v1_start, v1_end, v2_start, v2_
     v_sum_unit = v_sum / v_sum_mod
 
     return v_sum_unit, v1_unit, v2_unit
+
+
 # test rts = self.transformer_vec_to_z(v_sum_unit)
 def transformer_vec_to_z(v):
     # 计算夹角
@@ -1999,6 +2004,7 @@ def transformer_vec_to_z(v):
                             [axis[2] * axis[0] * (1 - c) - axis[1] * s, axis[2] * axis[1] * (1 - c)
                              + axis[0] * s, c + axis[2] ** 2 * (1 - c)]])
     return rot_maxtrix
+
 
 def meshgrid3d(occ_size, pc_range):
     """
