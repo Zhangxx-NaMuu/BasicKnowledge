@@ -1,19 +1,30 @@
 # -*- coding: UTF-8 -*-
 """
-==================================================
-@path   :BasicKnowledge -> -> algorithm.py
-@IDE    :PyCharm
-@Author :NaMuu
-@Email  :2458543125@qq.com
-@Date   :2025/3/27 15:52
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+@path   ：sindre_package -> tools.py
+@IDE    ：PyCharm
+@Author ：sindre
+@Email  ：yx@mviai.com
+@Date   ：2024/6/17 15:38
 @Version: V0.1
 @License: (C)Copyright 2021-2023 , UP3D
 @Reference:
 @History:
-- 2025/3/27 15:52:
-==================================================
+- 2024/6/17 :
+
+(一)本代码的质量保证期（简称“质保期”）为上线内 1个月，质保期内乙方对所代码实行包修改服务。
+(二)本代码提供三包服务（包阅读、包编译、包运行）不包熟
+(三)本代码所有解释权归权归神兽所有，禁止未开光盲目上线
+(四)请严格按照保养手册对代码进行保养，本代码特点：
+      i. 运行在风电、水电的机器上
+     ii. 机器机头朝东，比较喜欢太阳的照射
+    iii. 集成此代码的人员，应拒绝黄赌毒，容易诱发本代码性能越来越弱
+声明：未履行将视为自主放弃质保期，本人不承担对此产生的一切法律后果
+如有问题，热线: 114
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
-__author__ = 'zxx'
+__author__ = 'sindre'
 
 import json
 import vedo
@@ -23,6 +34,7 @@ from sklearn.decomposition import PCA
 from scipy.spatial import KDTree
 import vtk
 import os
+from numba import njit, prange
 
 
 def labels2colors(labels: np.array):
@@ -66,6 +78,23 @@ def labels2colors(labels: np.array):
         color_labels[mask] = color_dict[label]
 
     return color_labels
+
+
+def color_mapping(value, vmin=-1, vmax=1):
+    """将向量映射为颜色，遵从vcg映射标准"""
+    import matplotlib.colors as mcolors
+    colors = [
+        (1.0, 0.0, 0.0, 1.0),  # 红
+        (1.0, 1.0, 0.0, 1.0),  # 黄
+        (0.0, 1.0, 0.0, 1.0),  # 绿
+        (0.0, 1.0, 1.0, 1.0),  # 青
+        (0.0, 0.0, 1.0, 1.0)  # 蓝
+    ]
+    cmap = mcolors.LinearSegmentedColormap.from_list("VCG", colors)
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    value = norm(np.asarray(value))
+    rgba = cmap(value)
+    return (rgba * 255).astype(np.uint8)
 
 
 def vertex_labels_to_face_labels(faces: Union[np.array, list], vertex_labels: Union[np.array, list]) -> np.array:
@@ -188,7 +217,7 @@ def get_pca_transform(mesh: vedo.Mesh) -> np.array:
     :return: 
     """
     vedo_mesh = mesh.clone().decimate(n=5000).clean()
-    vertices = vedo_mesh.points()
+    vertices = vedo_mesh.vertices
 
     vedo_mesh.compute_curvature(method=1)
     data = vedo_mesh.pointdata['Mean_Curvature']
@@ -246,11 +275,8 @@ def apply_transform(vertices: np.array, transform: np.array) -> np.array:
 
     # 在每个顶点的末尾添加一个维度为1的数组，以便进行齐次坐标转换
     vertices = np.concatenate([vertices, np.ones_like(vertices[..., :1])], axis=-1)
-    vertices = vertices @ transform.T
-    # 移除结果中多余的维度，只保留前3列，即三维坐标
-    vertices = vertices[..., :3]
-
-    return vertices
+    vertices = vertices @ transform
+    return vertices[..., :3]
 
 
 def restore_transform(vertices: np.array, transform: np.array) -> np.array:
@@ -266,16 +292,14 @@ def restore_transform(vertices: np.array, transform: np.array) -> np.array:
 
     """
     # 得到转换矩阵的逆矩阵
-    inv_transform = np.linalg.inv(transform.T)
+    inv_transform = np.linalg.inv(transform)
 
     # 将经过转换后的顶点坐标乘以逆矩阵
-    vertices_restored = np.concatenate([vertices, np.ones_like(vertices[..., :1])], axis=-1) @ inv_transform
-
-    # 去除齐次坐标
-    vertices_restored = vertices_restored[:, :3]
+    vertices_restored = np.concatenate([vertices, np.ones_like(vertices[..., :1])], axis=-1)
+    vertices_restored = vertices_restored @ inv_transform
 
     # 最终得到还原后的顶点坐标 vertices_restored
-    return vertices_restored
+    return vertices_restored[:, :3]
 
 
 class NpEncoder(json.JSONEncoder):
@@ -619,7 +643,7 @@ def cut_mesh_point_loop(mesh, pts: vedo.Points, invert=False):
     return cut_mesh
 
 
-def reduce_face_by_meshlab(vertices, faces, max_facenum: int = 30000) -> vedo.Mesh:
+def simplify_by_meshlab(vertices, faces, max_facenum: int = 30000) -> vedo.Mesh:
     """通过二次边折叠算法减少网格中的面数，简化模型。
 
     Args:
@@ -646,29 +670,37 @@ def reduce_face_by_meshlab(vertices, faces, max_facenum: int = 30000) -> vedo.Me
     return vedo.Mesh(mesh.current_mesh())
 
 
-def remove_floater_by_meshlab(vertices, faces, nbfaceratio=0.1, nonclosedonly=False) -> vedo.Mesh:
-    """移除网格中的浮动小组件（小面积不连通部分）。
+def isotropic_remeshing_by_acvd(vedo_mesh, target_num=10000):
+    """
+    对给定的 vedo 网格进行均质化处理，使其达到指定的目标面数。
+
+    该函数使用 pyacvd 库中的 Clustering 类对输入的 vedo 网格进行处理。
+    如果网格的顶点数小于等于目标面数，会先对网格进行细分，然后进行聚类操作，
+    最终生成一个面数接近目标面数的均质化网格。
 
     Args:
-        mesh (pymeshlab.MeshSet): 输入的网格模型。
-        nbfaceratio (float): 面积比率阈值，小于该比率的部分将被移除。
-        nonclosedonly (bool): 是否仅移除非封闭部分。
+        vedo_mesh (vedo.Mesh): 输入的 vedo 网格对象，需要进行均质化处理的网格。
+        target_num (int, optional): 目标面数，即经过处理后网格的面数接近该值。
+            默认为 10000。
 
     Returns:
-        pymeshlab.MeshSet: 移除浮动小组件后的网格模型。
+        vedo.Mesh: 经过均质化处理后的 vedo 网格对象，其面数接近目标面数。
+
+    Notes:
+        该函数依赖于 pyacvd 和 pyvista 库，使用前请确保这些库已正确安装。
+
     """
-    import pymeshlab
+    from pyacvd import Clustering
+    from pyvista import wrap
+    print(" Clustering target_num:{}".format(target_num))
+    clus = Clustering(wrap(vedo_mesh.dataset))
+    if vedo_mesh.npoints <= target_num:
+        clus.subdivide(3)
+    clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
+    return vedo.Mesh(clus.create_mesh())
 
-    mesh = pymeshlab.MeshSet()
-    mesh.add_mesh(pymeshlab.Mesh(vertex_matrix=vertices, face_matrix=faces))
-    mesh.apply_filter("compute_selection_by_small_disconnected_components_per_face",
-                      nbfaceratio=nbfaceratio, nonclosedonly=nonclosedonly)
-    mesh.apply_filter("compute_selection_transfer_face_to_vertex", inclusive=False)
-    mesh.apply_filter("meshing_remove_selected_vertices_and_faces")
-    return vedo.Mesh(mesh.current_mesh())
 
-
-def isotropic_remeshing_pymeshlab(vertices, faces, target_edge_length=0.5, iterations=1) -> vedo.Mesh:
+def isotropic_remeshing_by_meshlab(mesh, target_edge_length=0.5, iterations=1) -> vedo.Mesh:
     """
     使用 PyMeshLab 实现网格均匀化。
 
@@ -680,10 +712,8 @@ def isotropic_remeshing_pymeshlab(vertices, faces, target_edge_length=0.5, itera
     Returns:
         均匀化后的网格对象。
     """
-
     import pymeshlab
-    mesh = pymeshlab.MeshSet()
-    mesh.add_mesh(pymeshlab.Mesh(vertex_matrix=vertices, face_matrix=faces))
+
     # 应用 Isotropic Remeshing 过滤器
     mesh.apply_filter(
         "meshing_isotropic_explicit_remeshing",
@@ -692,12 +722,31 @@ def isotropic_remeshing_pymeshlab(vertices, faces, target_edge_length=0.5, itera
     )
 
     # 返回处理后的网格
-    return vedo.Mesh(mesh.current_mesh())
+    return mesh
 
 
-def clean_redundant(ms):
+def fix_floater_by_meshlab(mesh, nbfaceratio=0.1, nonclosedonly=False) -> vedo.Mesh:
+    """移除网格中的浮动小组件（小面积不连通部分）。
+
+    Args:
+        mesh (pymeshlab.MeshSet): 输入的网格模型。
+        nbfaceratio (float): 面积比率阈值，小于该比率的部分将被移除。
+        nonclosedonly (bool): 是否仅移除非封闭部分。
+
+    Returns:
+        pymeshlab.MeshSet: 移除浮动小组件后的网格模型。
     """
-    处理冗余元素，如合并临近顶点、移除重复面和顶点等。
+
+    mesh.apply_filter("compute_selection_by_small_disconnected_components_per_face",
+                      nbfaceratio=nbfaceratio, nonclosedonly=nonclosedonly)
+    mesh.apply_filter("compute_selection_transfer_face_to_vertex", inclusive=False)
+    mesh.apply_filter("meshing_remove_selected_vertices_and_faces")
+    return mesh
+
+
+def fix_invalid_by_meshlab(ms):
+    """
+    处理冗余元素，如合移除重复面和顶点等, 清理无效的几何结构，如折叠面、零面积面和未引用的顶点。
 
     Args:
         ms: pymeshlab.MeshSet 对象
@@ -705,32 +754,18 @@ def clean_redundant(ms):
     Returns:
         pymeshlab.MeshSet 对象
     """
-    ms.apply_filter("meshing_merge_close_vertices")
     ms.apply_filter("meshing_remove_duplicate_faces")
     ms.apply_filter("meshing_remove_duplicate_vertices")
     ms.apply_filter("meshing_remove_unreferenced_vertices")
-    return ms
-
-
-def clean_invalid(ms):
-    """
-    清理无效的几何结构，如折叠面、零面积面和未引用的顶点。
-
-    Args:
-        ms: pymeshlab.MeshSet 对象
-
-    Returns:
-        pymeshlab.MeshSet 对象
-    """
     ms.apply_filter("meshing_remove_folded_faces")
     ms.apply_filter("meshing_remove_null_faces")
     ms.apply_filter("meshing_remove_unreferenced_vertices")
     return ms
 
 
-def clean_low_qualitys(ms):
+def fix_component_by_meshlab(ms):
     """
-    移除低质量的组件，如小的连通分量。
+    移除低质量的组件，如小的连通分量,移除网格中的浮动小组件（小面积不连通部分）。
 
     Args:
         ms: pymeshlab.MeshSet 对象
@@ -739,11 +774,12 @@ def clean_low_qualitys(ms):
         pymeshlab.MeshSet 对象
     """
     ms.apply_filter("meshing_remove_connected_component_by_diameter")
-    ms.apply_filter("meshing_remove_connected_component_by_face_number", mincomponentsize=10)
+    ms.apply_filter("meshing_remove_connected_component_by_face_number")
+
     return ms
 
 
-def repair_topology(ms):
+def fix_topology_by_meshlab(ms):
     """
     修复拓扑问题，如 T 型顶点、非流形边和非流形顶点，并对齐不匹配的边界。
 
@@ -1076,52 +1112,172 @@ def load_all(path):
         return None
 
 
-def farthest_point_sampling(arr, n_sample, start_idx=None):
-    """
-    无需计算所有点对之间的距离，进行最远点采样。
+@njit(nogil=True, fastmath=True, cache=True, parallel=True)
+def furthestsampling_jit(xyz: np.ndarray, offset: np.ndarray, new_offset: np.ndarray) -> np.ndarray:
+    """使用并行批次处理的最远点采样算法实现
+
+    该方法将输入点云划分为多个批次，每个批次独立进行最远点采样。通过维护最小距离数组，
+    确保每次迭代选择距离已选点集最远的新点，实现高效采样。
 
     Args:
+        xyz (np.ndarray): 输入点云坐标，形状为(N, 3)的C连续float32数组
+        offset (np.ndarray): 原始点云的分段偏移数组，表示每个批次的结束位置。例如[1000, 2000]表示两个批次
+        new_offset (np.ndarray): 采样后的分段偏移数组，表示每个批次的目标采样数。例如[200, 400]表示每批采200点
 
-        arr : numpy array
-            形状为 (n_points, n_dim) 的位置数组，其中 n_points 是点的数量，n_dim 是每个点的维度。
-        n_sample : int
-            需要采样的点的数量。
-        start_idx : int, 可选
-            如果给定，指定起始点的索引；否则，随机选择一个点作为起始点。（默认值: None）
+    Returns:
+        np.ndarray: 采样点索引数组，形状为(total_samples,)，其中total_samples = new_offset[-1]
 
-    Return:
+    Notes:
+        实现特点:
+        - 使用Numba并行加速，支持多核并行处理不同批次
+        - 采用平方距离计算避免开方运算
+        - 每批次独立初始化距离数组，避免跨批次干扰
+        - 自动处理边界情况（空批次或零采样批次）
 
-        numpy array of shape (n_sample,)
-            采样得到的点的索引数组。
-
-    Example:
-
-        >>> import numpy as np
-        >>> data = np.random.rand(100, 1024)
-        >>> point_idx = farthest_point_sampling(data, 3)
-        >>> print(point_idx)
-            array([80, 79, 27])
-
-        >>> point_idx = farthest_point_sampling(data, 5, 60)
-        >>> print(point_idx)
-            array([60, 39, 59, 21, 73])
+        典型调用流程:
+        >>> n_total = 10000
+        >>> offset = np.array([1000, 2000, ..., 10000], dtype=np.int32)
+        >>> new_offset = np.array([200, 400, ..., 2000], dtype=np.int32)
+        >>> sampled_indices = furthestsampling_jit(xyz, offset, new_offset)
     """
-    n_points, n_dim = arr.shape
+    # 确保输入为C连续的float32数组
+    total_samples = new_offset[-1]
+    indices = np.empty(total_samples, dtype=np.int32)
 
-    if (start_idx is None) or (start_idx < 0):
-        start_idx = np.random.randint(0, n_points)
+    # 并行处理每个批次
+    for bid in prange(len(new_offset)):
+        # 确定批次边界
+        if bid == 0:
+            n_start, n_end = 0, offset[0]
+            m_start, m_end = 0, new_offset[0]
+        else:
+            n_start = offset[bid - 1]
+            n_end = offset[bid]
+            m_start = new_offset[bid - 1]
+            m_end = new_offset[bid]
 
-    sampled_indices = [start_idx]
-    min_distances = np.full(n_points, np.inf)
+        batch_size = n_end - n_start
+        sample_size = m_end - m_start
 
-    for _ in range(n_sample - 1):
-        current_point = arr[sampled_indices[-1]]
-        dist_to_current_point = np.linalg.norm(arr - current_point, axis=1)
-        min_distances = np.minimum(min_distances, dist_to_current_point)
-        farthest_point_idx = np.argmax(min_distances)
-        sampled_indices.append(farthest_point_idx)
+        if batch_size == 0 or sample_size == 0:
+            continue
 
-    return np.array(sampled_indices)
+        # 提取当前批次的点坐标（三维）
+        batch_xyz = xyz[n_start:n_end]
+        x = batch_xyz[:, 0]  # x坐标数组
+        y = batch_xyz[:, 1]  # y坐标数组
+        z = batch_xyz[:, 2]  # z坐标数组
+
+        # 初始化最小距离数组
+        min_dists = np.full(batch_size, np.finfo(np.float32).max, dtype=np.float32)
+
+        # 首点选择批次内的第一个点
+        current_local_idx = 0
+        indices[m_start] = n_start + current_local_idx  # 转换为全局索引
+
+        # 初始化最新点坐标
+        last_x = x[current_local_idx]
+        last_y = y[current_local_idx]
+        last_z = z[current_local_idx]
+
+        # 主采样循环
+        for j in range(1, sample_size):
+            max_dist = -1.0
+            best_local_idx = 0
+
+            # 遍历所有点更新距离并寻找最大值
+            for k in range(batch_size):
+                # 计算到最新点的平方距离
+                dx = x[k] - last_x
+                dy = y[k] - last_y
+                dz = z[k] - last_z
+                dist = dx * dx + dy * dy + dz * dz
+
+                # 更新最小距离
+                if dist < min_dists[k]:
+                    min_dists[k] = dist
+
+                # 跟踪当前最大距离
+                if min_dists[k] > max_dist:
+                    max_dist = min_dists[k]
+                    best_local_idx = k
+
+            # 更新当前最优点的索引和坐标
+            current_local_idx = best_local_idx
+            indices[m_start + j] = n_start + current_local_idx  # 转换为全局索引
+            last_x = x[current_local_idx]
+            last_y = y[current_local_idx]
+            last_z = z[current_local_idx]
+
+    return indices
+
+
+def farthest_point_sampling(vertices: np.ndarray, n_sample: int = 2000, auto_seg: bool = True,
+                            n_batches: int = 10) -> np.ndarray:
+    """
+    最远点采样，支持自动分批处理
+
+    根据参数配置，自动决定是否将输入点云分割为多个批次进行处理。当处理大规模数据时，
+    建议启用auto_seg以降低内存需求并利用并行加速。
+
+    Args:
+        vertices (np.ndarray): 输入点云坐标，形状为(N, 3)的浮点数组
+        n_sample (int, optional): 总采样点数，当auto_seg=False时生效。默认2000
+        auto_seg (bool, optional): 是否启用自动分批处理(提速，但会丢失全局距离信息)。默认False
+        n_batches (int, optional): 自动分批时的批次数量。默认10
+
+    Returns:
+        np.ndarray: 采样点索引数组，形状为(n_sample,)
+
+    Raises:
+        ValueError: 当输入数组维度不正确时抛出
+
+    Notes:
+        典型场景:
+        - 小规模数据（如5万点以下）: auto_seg=False，单批次处理
+        - 大规模数据（如百万级点）: auto_seg=True，分10批处理，每批采样2000点
+
+        示例:
+        >>> vertices = np.random.rand(100000, 3).astype(np.float32)
+        >>> # 自动分10批，每批采2000点
+        >>> indices = farthest_point_sampling(vertices, auto_seg=True)
+        >>> # 单批采5000点
+        >>> indices = farthest_point_sampling(vertices, n_sample=5000)
+    """
+    if vertices.ndim != 2 or vertices.shape[1] != 3:
+        raise ValueError("输入点云必须是形状为(N, 3)的二维数组")
+    xyz = np.ascontiguousarray(vertices, dtype=np.float32)
+    n_total = xyz.shape[0]
+    if auto_seg:
+        # 计算批次采样数分配
+        base_samples = n_sample // n_batches
+        remainder = n_sample % n_batches
+
+        # 创建采样数数组，前remainder个批次多采1点
+        batch_samples = [base_samples + 1 if i < remainder else base_samples
+                         for i in range(n_batches)]
+
+        # 生成偏移数组（累加形式）
+        new_offset = np.cumsum(batch_samples).astype(np.int32)
+
+        # 原始点云分批偏移（均匀分配）
+        batch_size = n_total // n_batches
+        offset = np.array([batch_size * (i + 1) for i in range(n_batches)], dtype=np.int32)
+        offset[-1] = n_total  # 最后一批包含余数点
+
+    else:
+        offset = np.array([n_total], dtype=np.int32)
+        new_offset = np.array([n_sample], dtype=np.int32)
+    return furthestsampling_jit(xyz, offset, new_offset)
+
+
+def farthest_point_sampling_by_open3d(vertices: np.ndarray, n_sample: int = 2000) -> np.ndarray:
+    """ 输出采样后的点 """
+    import open3d as o3d
+    pcd = o3d.t.geometry.PointCloud(np.ascontiguousarray(vertices, dtype=np.float32))
+    downpcd_farthest = pcd.farthest_point_down_sample(n_sample)
+    out = downpcd_farthest.point.positions.numpy()
+    return out
 
 
 def add_base(vd_mesh, value_z=-20, close_base=True, return_strips=False):
@@ -1269,36 +1425,6 @@ def array2voxel(voxel_array):
     return grid_index_array
 
 
-def homogenizing_mesh(vedo_mesh, target_num=10000):
-    """
-    对给定的 vedo 网格进行均质化处理，使其达到指定的目标面数。
-
-    该函数使用 pyacvd 库中的 Clustering 类对输入的 vedo 网格进行处理。
-    如果网格的顶点数小于等于目标面数，会先对网格进行细分，然后进行聚类操作，
-    最终生成一个面数接近目标面数的均质化网格。
-
-    Args:
-        vedo_mesh (vedo.Mesh): 输入的 vedo 网格对象，需要进行均质化处理的网格。
-        target_num (int, optional): 目标面数，即经过处理后网格的面数接近该值。
-            默认为 10000。
-
-    Returns:
-        vedo.Mesh: 经过均质化处理后的 vedo 网格对象，其面数接近目标面数。
-
-    Notes:
-        该函数依赖于 pyacvd 和 pyvista 库，使用前请确保这些库已正确安装。
-
-    """
-    from pyacvd import Clustering
-    from pyvista import wrap
-    print(" Clustering target_num:{}".format(target_num))
-    clus = Clustering(wrap(vedo_mesh.dataset))
-    if vedo_mesh.npoints <= target_num:
-        clus.subdivide(3)
-    clus.cluster(target_num, maxiter=100, iso_try=10, debug=False)
-    return vedo.Mesh(clus.create_mesh())
-
-
 def fill_hole_with_center(mesh, boundaries, return_vf=False):
     """
         用中心点方式强制补洞
@@ -1415,17 +1541,19 @@ def compute_curvature_by_meshlab(ms):
             每个元素的范围是 [0, 255]，表示顶点的颜色。
         - vertex_curvature (numpy.ndarray): 顶点曲率数组，形状为 (n,)，其中 n 是顶点的数量。
             每个元素表示对应顶点的曲率。
-        - mesh: pymeshlab格式ms
+        - new_vertex (numpy.ndarray): 新的顶点数组，形状为 (n,)，其中 n 是顶点的数量。
+
 
     """
     ms.compute_curvature_principal_directions_per_vertex()
     curr_ms = ms.current_mesh()
     vertex_colors = curr_ms.vertex_color_matrix() * 255
     vertex_curvature = curr_ms.vertex_scalar_array()
-    return vertex_colors, vertex_curvature, ms
+    new_vertex = curr_ms.vertex_matrix()
+    return vertex_colors, vertex_curvature, new_vertex
 
 
-def compute_curvature_by_igl(v, f, max_curvature=True):
+def compute_curvature_by_igl(v, f, max_curvature=False):
     """
     用igl计算平均曲率并归一化
 
@@ -1438,7 +1566,7 @@ def compute_curvature_by_igl(v, f, max_curvature=True):
         - vertex_curvature (numpy.ndarray): 顶点曲率数组，形状为 (n,)，其中 n 是顶点的数量。
             每个元素表示对应顶点的曲率。
 
-    Note:
+    Notes:
         pd1 : #v by 3 maximal curvature direction for each vertex
         pd2 : #v by 3 minimal curvature direction for each vertex
         pv1 : #v by 1 maximal curvature value for each vertex
@@ -1453,8 +1581,7 @@ def compute_curvature_by_igl(v, f, max_curvature=True):
     _, _, K_max, K = igl.principal_curvature(v, f)
     if max_curvature:
         K = K_max
-    K_normalized = (K - K.min()) / (K.max() - K.min())
-    return K_normalized
+    return K
 
 
 def harmonic_by_igl(v, f, map_vertices_to_circle=True):
@@ -1995,10 +2122,179 @@ def sample_sdf_mesh(v, f, number_of_points=200000):
     return points, sdf
 
 
+def resample_mesh(vertices, faces, density=1, num_samples=None):
+    """在由顶点和面定义的网格表面上进行点云重采样。
+
+    1. 密度模式：根据单位面片面积自动计算总采样数
+    2. 指定数量模式：直接指定需要采样的总点数
+
+    该函数使用向量化操作高效地在网格表面进行均匀采样，采样密度由单位面积点数决定。
+    采样策略基于重心坐标系，采用分层随机抽样方法。
+
+    注意：
+        零面积三角形会被自动跳过，因为不会分配采样点。
+
+    参考实现：
+        https://chrischoy.github.io/research/barycentric-coordinate-for-mesh-sampling/
+
+    Args:
+        vertices (numpy.ndarray): 网格顶点数组，形状为(V, 3)，V表示顶点数量
+        faces (numpy.ndarray): 三角形面片索引数组，形状为(F, 3)，数据类型应为整数
+        density (float, 可选): 每单位面积的采样点数，默认为1
+        num_samples (int, 可选): 指定总采样点数，若提供则忽略density参数
+
+    Returns:
+        numpy.ndarray: 重采样后的点云数组，形状为(N, 3)，N为总采样点数
+
+    Notes:
+        采样点生成公式（重心坐标系）：
+            P = (1 - √r₁)A + √r₁(1 - r₂)B + √r₁ r₂ C
+        其中：
+        - r₁, r₂ ∈ [0, 1) 为随机数
+        - A, B, C 为三角形顶点
+        - 该公式可确保在三角形表面均匀采样
+
+        算法流程：
+        1. 计算每个面的面积并分配采样点数
+        2. 通过随机舍入处理总点数误差
+        3. 使用向量化操作批量生成采样点
+
+    References:
+        [1] Barycentric coordinate system - https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+    """
+    # 计算每个面的法向量并计算面的面积
+    vec_cross = np.cross(
+        vertices[faces[:, 0], :] - vertices[faces[:, 2], :],
+        vertices[faces[:, 1], :] - vertices[faces[:, 2], :],
+    )
+    face_areas = np.sqrt(np.sum(vec_cross ** 2, 1))
+
+    if num_samples is not None:
+        n_samples = num_samples
+        # 按面积比例分配采样数
+        ratios = face_areas / face_areas.sum()
+        n_samples_per_face = np.random.multinomial(n_samples, ratios)
+    else:
+        # 计算需要采样的总点数
+        n_samples = (np.sum(face_areas) * density).astype(int)
+        # face_areas = face_areas / np.sum(face_areas)
+
+        # 为每个面分配采样点数
+        # 首先，过度采样点并去除多余的点
+        # Bug 修复由 Yangyan (yangyan.lee@gmail.com) 完成
+        n_samples_per_face = np.ceil(density * face_areas).astype(int)
+
+    floor_num = np.sum(n_samples_per_face) - n_samples
+    if floor_num > 0:
+        indices = np.where(n_samples_per_face > 0)[0]
+        floor_indices = np.random.choice(indices, floor_num, replace=True)
+        n_samples_per_face[floor_indices] -= 1
+
+    n_samples = np.sum(n_samples_per_face)
+
+    # 创建一个包含面索引的向量
+    sample_face_idx = np.zeros((n_samples,), dtype=int)
+    acc = 0
+    for face_idx, _n_sample in enumerate(n_samples_per_face):
+        sample_face_idx[acc: acc + _n_sample] = face_idx
+        acc += _n_sample
+
+    # 生成随机数
+    r = np.random.rand(n_samples, 2)
+    faces_samples = faces[sample_face_idx]
+    A = vertices[faces_samples[:, 0]]
+    B = vertices[faces_samples[:, 1]]
+    C = vertices[faces_samples[:, 2]]
+
+    # 使用重心坐标公式计算采样点
+    P = (
+            (1 - np.sqrt(r[:, 0:1])) * A
+            + np.sqrt(r[:, 0:1]) * (1 - r[:, 1:]) * B
+            + np.sqrt(r[:, 0:1]) * r[:, 1:] * C
+    )
+
+    # # 随机采样
+    # if num_samples is not None:
+    #     idx = np.random.choice(len(P), num_samples,replace=False)
+    #     P=P[idx]
+
+    return P
 
 
+def subdivide_loop_by_trimesh(
+        vertices,
+        faces,
+        iterations=5,
+        max_face_num=100000,
+        face_mask=None,
+):
+    """
+
+    对给定的顶点和面片进行 Loop 细分。
+
+    Args:
+        vertices (array-like): 输入的顶点数组，形状为 (n, 3)，其中 n 是顶点数量。
+        faces (array-like): 输入的面片数组，形状为 (m, 3)，其中 m 是面片数量。
+        iterations (int, optional): 细分的迭代次数，默认为 5。
+        max_face_num (int, optional): 细分过程中允许的最大面片数量，达到此数量时停止细分，默认为 100000。
+        face_mask (array-like, optional): 面片掩码数组，用于指定哪些面片需要进行细分，默认为 None。
+
+    Returns:
+        tuple: 包含细分后的顶点数组、细分后的面片数组和面片掩码数组的元组。
+
+    Notes:
+        以下是一个示例代码，展示了如何使用该函数：
+        ```python
+        # 1. 获取每个点的最近表面点及对应面
+        face_indices = set()
+        kdtree = cKDTree(mesh.vertices)
+        for p in pts:
+            # 查找半径2mm内的顶点
+            vertex_indices = kdtree.query_ball_point(p, r=1.0)
+            for v_idx in vertex_indices:
+                # 获取包含这些顶点的面片
+                faces = mesh.vertex_faces[v_idx]
+                faces = faces[faces != -1]  # 去除无效索引
+                face_indices.update(faces.tolist())
+        face_indices = np.array([[i] for i in list(face_indices)])
+        new_vertices, new_face, _ = subdivide_loop(v, f, face_mask=face_indices)
+        ```
 
 
+    """
+    import trimesh
+    current_v = np.asarray(vertices)
+    current_f = np.asarray(faces)
+    if face_mask is not None:
+        face_mask = np.asarray(face_mask).reshape(-1)
+
+    for _ in range(iterations):
+        current_v, current_f, face_mask_dict = trimesh.remesh.subdivide(current_v, current_f, face_mask,
+                                                                        return_index=True)
+        face_mask = np.asarray(np.concatenate(list(face_mask_dict.values()))).reshape(-1)
+        # 检查停止条件
+        if len(current_f) > max_face_num:
+            print(f"subdivide: {len(current_f)} >{max_face_num},break")
+            break
+
+    return current_v, current_f, face_mask
 
 
+def angle_axis_np(angle, axis):
+    """
+    计算绕给定轴旋转指定角度的旋转矩阵。
 
+    Args:
+        angle (float): 旋转角度（弧度）。
+        axis (np.ndarray): 旋转轴，形状为 (3,) 的 numpy 数组。
+
+    Returns:
+        np.array: 3x3 的旋转矩阵，数据类型为 np.float32。
+    """
+    u = axis / np.linalg.norm(axis)
+    cosval, sinval = np.cos(angle), np.sin(angle)
+    cross_prod_mat = np.array([[0.0, -u[2], u[1]],
+                               [u[2], 0.0, -u[0]],
+                               [-u[1], u[0], 0.0]])
+    R = cosval * np.eye(3) + sinval * cross_prod_mat + (1.0 - cosval) * np.outer(u, u)
+    return R
