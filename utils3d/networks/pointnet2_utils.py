@@ -8,9 +8,10 @@ def pc_normalize(pc):
     l = pc.shape[0]
     centroid = np.mean(pc, axis=0)
     pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
+    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
     pc = pc / m
     return pc
+
 
 def square_distance(src, dst):
     """
@@ -79,6 +80,7 @@ def farthest_point_sample(xyz, npoint):
         farthest = torch.max(distance, -1)[1]
     return centroids
 
+
 def farthest_point_sample_np(xyz, npoint):
     xyz = torch.from_numpy(xyz)
     device = xyz.device
@@ -95,6 +97,7 @@ def farthest_point_sample_np(xyz, npoint):
         distance[mask] = dist[mask]
         farthest = torch.max(distance, -1)[1]
     return centroids.cpu().detach().numpy()
+
 
 def query_ball_point(radius, nsample, xyz, new_xyz):
     """
@@ -119,7 +122,7 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
         group_idx[mask] = group_first[mask]
     except Exception as e:
         print(e)
-        
+
     return group_idx
 
 
@@ -137,15 +140,15 @@ def sample_and_group(npoint, radius, nsample, xyz, points, returnfps=False):
     """
     B, N, C = xyz.shape
     S = npoint
-    fps_idx = farthest_point_sample(xyz, npoint) # [B, npoint, C]
+    fps_idx = farthest_point_sample(xyz, npoint)  # [B, npoint, C]
     new_xyz = index_points(xyz, fps_idx)
     idx = query_ball_point(radius, nsample, xyz, new_xyz)
-    grouped_xyz = index_points(xyz, idx) # [B, npoint, nsample, C]
+    grouped_xyz = index_points(xyz, idx)  # [B, npoint, nsample, C]
     grouped_xyz_norm = grouped_xyz - new_xyz.view(B, S, 1, C)
 
     if points is not None:
         grouped_points = index_points(points, idx)
-        new_points = torch.cat([grouped_xyz_norm, grouped_points], dim=-1) # [B, npoint, nsample, C+D]
+        new_points = torch.cat([grouped_xyz_norm, grouped_points], dim=-1)  # [B, npoint, nsample, C+D]
     else:
         new_points = grouped_xyz_norm
     if returnfps:
@@ -208,10 +211,10 @@ class PointNetSetAbstraction(nn.Module):
             new_xyz, new_points = sample_and_group(self.npoint, self.radius, self.nsample, xyz, points)
         # new_xyz: sampled points position data, [B, npoint, C]
         # new_points: sampled points data, [B, npoint, nsample, C+D]
-        new_points = new_points.permute(0, 3, 2, 1) # [B, C+D, nsample,npoint]
+        new_points = new_points.permute(0, 3, 2, 1)  # [B, C+D, nsample,npoint]
         for i, conv in enumerate(self.mlp_convs):
             bn = self.mlp_bns[i]
-            new_points =  F.relu(bn(conv(new_points)))
+            new_points = F.relu(bn(conv(new_points)))
 
         new_points = torch.max(new_points, 2)[0]
         new_xyz = new_xyz.permute(0, 2, 1)
@@ -269,7 +272,7 @@ class PointNetSetAbstractionMsg(nn.Module):
             for j in range(len(self.conv_blocks[i])):
                 conv = self.conv_blocks[i][j]
                 bn = self.bn_blocks[i][j]
-                grouped_points =  F.relu(bn(conv(grouped_points)))
+                grouped_points = F.relu(bn(conv(grouped_points)))
             new_points = torch.max(grouped_points, 2)[0]  # [B, D', S]
             new_points_list.append(new_points)
 
@@ -330,3 +333,28 @@ class PointNetFeaturePropagation(nn.Module):
             new_points = F.relu(bn(conv(new_points)))
         return new_points
 
+
+def pca_with_svd(data, eps=1e-6):
+    """PCA预测旋转正交矩阵
+    `
+    def pca_with_svd(data, n_components=3):
+        # 数据中心化
+        mean = torch.mean(data, dim=0)
+        centered_data = data - mean
+        # 执行 SVD
+        _, _, v = torch.linalg.svd(centered_data, full_matrices=False)
+        # 提取前 n_components 个主成分
+        components = v[:n_components]
+        return components
+    `
+
+    """
+    identity = torch.eye(data.size(-1), device=data.device) * eps
+    cov = torch.matmul(data.transpose(-2, -1), data) / (data.size(-2) - 1)
+    cov_reg = cov + identity
+    _, _, v = torch.linalg.svd(cov_reg, full_matrices=False)
+    rotation = v.transpose(1, 2)
+    det = torch.det(rotation)  # 确保右手坐标系
+    new_last_column = rotation[:, :, -1] * det.unsqueeze(-1)
+    rotation = torch.cat([rotation[:, :, :-1], new_last_column.unsqueeze(-1)], dim=-1)
+    return rotation
