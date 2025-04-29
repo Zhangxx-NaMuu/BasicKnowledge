@@ -15,20 +15,18 @@
 """
 __author__ = 'zxx'
 """
+
+
 专注于牙颌mesh的特殊实现
+
 """
+__author__ = 'sindre'
 
 import vedo
 import numpy as np
 from typing import *
 from sklearn.decomposition import PCA
-from sindre.utils3d.algorithm import apply_transform, cut_mesh_point_loop
-
-import vedo
-import numpy as np
-from typing import *
-from sklearn.decomposition import PCA
-from sindre.utils3d.algorithm import apply_transform, cut_mesh_point_loop
+from sindre.utils3d.algorithm import apply_transform, cut_mesh_point_loop, subdivide_loop_by_trimesh
 
 
 def convert_fdi2idx(labels):
@@ -140,7 +138,7 @@ def transform_crown(near_mesh: vedo.Mesh, jaw_mesh: vedo.Mesh) -> vedo.Mesh:
     return new_m
 
 
-def cut_mesh_point_loop_crow(mesh, pts, error_show=True):
+def cut_mesh_point_loop_crow(mesh, pts, error_show=True, invert=True):
     """
 
     实现的基于线的牙齿冠分割;
@@ -149,29 +147,34 @@ def cut_mesh_point_loop_crow(mesh, pts, error_show=True):
         mesh (_type_): 待切割网格
         pts (vedo.Points/Line): 切割线
         error_show(bool, optional): 裁剪失败是否进行渲染. Defaults to True.
+        invert(bool): 是否取反；
 
     Returns:
         _type_: 切割后的网格
     """
+    if len(pts.vertices) > 30:
+        s = int(len(pts.vertices) / 30)
+        pts = vedo.Points(pts.vertices[::s])
 
     # 计算各区域到曲线的最近距离,去除不相关的联通体
     def batch_closest_dist(vertices, curve_pts):
         curve_matrix = np.array(curve_pts)
         dist_matrix = np.linalg.norm(vertices[:, np.newaxis] - curve_matrix, axis=2)
-        return np.min(dist_matrix, axis=1)
+        return np.sum(dist_matrix, axis=1)
 
     regions = mesh.split()
     min_dists = [np.min(batch_closest_dist(r.vertices, pts.vertices)) for r in regions]
     mesh = regions[np.argmin(min_dists)]
 
-    c1 = cut_mesh_point_loop(mesh, pts, invert=False)
-    c2 = cut_mesh_point_loop(mesh, pts, invert=True)
+    c1 = cut_mesh_point_loop(mesh, pts, invert=not invert)
+    c2 = cut_mesh_point_loop(mesh, pts, invert=invert)
 
-    c1_num = len(c1.boundaries().split())
-    c2_num = len(c2.boundaries().split())
+    # 可能存在网格错误造成的洞,默认执行补洞
+    c1_num = len(c1.fill_holes().split()[0].boundaries().split())
+    c2_num = len(c2.fill_holes().split()[0].boundaries().split())
 
     # 牙冠只能有一个开口
-    if np.min(min_dists) < 0.1 and c1_num == 1:
+    if c1_num == 1:
         cut_mesh = c1
     elif c2_num == 1:
         cut_mesh = c2
@@ -183,3 +186,67 @@ def cut_mesh_point_loop_crow(mesh, pts, error_show=True):
         return None
 
     return cut_mesh
+
+
+def subdivide_with_pts(v, f, line_pts, r=0.15, iterations=3, method="mid"):
+    """
+    对给定的网格和线点集进行局部细分。
+
+    Args:
+        v (array-like): 输入网格的顶点数组。
+        f (array-like): 输入网格的面数组。
+        line_pts (array-like): 线的点集数组。
+        r (float, optional): 查找线点附近顶点的半径，默认为 0.15.
+        method (str, optional): 细分方法，可选值为 "mid"（中点细分）或其他值（对应 ls3_loop 细分），默认为 "mid"。
+
+    Returns:
+        - new_vertices (np.ndarray): 细分后的顶点数组;
+
+        - new_face (np.ndarray): 细分后的面数组;
+
+    Notes:
+        ```python
+        # 闭合线可能在曲面上，曲面内，曲面外
+        line = Line(pts)
+        mesh = isotropic_remeshing_by_acvd(mesh)
+        v, f = np.array(mesh.vertices), np.array(mesh.cells)
+        new_vertices, new_face = subdivide_with_pts(v, f, pts)
+
+        show([(Mesh([new_vertices, new_face]).c("green"), Line(pts, lw = 2, c = "red")),
+             (Mesh([v, f]).c("pink"), Line(pts, lw = 2, c = "red"))], N = 2).close()
+        ```
+
+    """
+
+    from scipy.spatial import cKDTree
+    import pymeshlab
+    v, f, pts = np.array(v), np.array(f), np.array(line_pts)
+    # 获取每个点的最近表面点及对应面
+    face_indices = set()
+    kdtree = cKDTree(v)
+    vertex_indices = kdtree.query_ball_point(pts, r=r)
+
+    #合并所有邻近顶点并去重
+    all_vertex_indices = np.unique(np.hstack(vertex_indices)).astype(np.int32)
+    face_mask = np.any(np.isin(f, all_vertex_indices), axis=1)
+
+    # 局部细分
+    ms = pymeshlab.MeshSet()
+    ms.add_mesh(pymeshlab.Mesh(vertex_matrix=v, face_matrix=f, f_scalar_array=face_mask))
+    ms.compute_selection_by_condition_per_face(condselect="fq == 1")
+    if method == "mid":
+        ms.meshing_surface_subdivision_midpoint(
+            iterations=iterations,
+            threshold=pymeshlab.PercentageValue(1e-4),
+            selected=True
+        )
+    else:
+        ms.meshing_surface_subdivision_ls3_loop(
+            iterations=iterations,
+            threshold=pymeshlab.PercentageValue(1e-4),
+            selected=True
+        )
+    current_mesh = ms.current_mesh()
+    new_vertices = current_mesh.vertex_matrix()
+    new_faces = current_mesh.face_matrix()
+    return new_vertices, new_faces
